@@ -1,0 +1,393 @@
+import { useState } from 'react';
+import { useFitness } from '../../context/FitnessContext';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { User, Edit2, Save, X, QrCode, Download } from 'lucide-react';
+import { toast } from 'sonner';
+import { QRCodeSVG } from 'qrcode.react';
+
+export function Profile() {
+  const { profile, updateProfile } = useFitness();
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState(profile);
+  const [customUrl, setCustomUrl] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateProfile(formData);
+    setIsEditing(false);
+    toast.success('Profile updated successfully!');
+  };
+
+  const handleCancel = () => {
+    setFormData(profile);
+    setIsEditing(false);
+  };
+
+  // Get website URL - use custom URL if provided, otherwise current origin
+  const defaultUrl = window.location.origin;
+  const websiteUrl = customUrl.trim() || defaultUrl;
+  const isLocalhost = defaultUrl.includes('localhost') || defaultUrl.includes('127.0.0.1');
+
+  // Download QR Code as image
+  const downloadQRCode = () => {
+    const svg = document.getElementById('qr-code-svg');
+    if (!svg) {
+      toast.error('QR Code नहीं मिला!');
+      return;
+    }
+
+    try {
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        toast.error('Download में समस्या आई!');
+        return;
+      }
+
+      const img = new Image();
+      
+      // Set canvas size for better quality
+      canvas.width = 400;
+      canvas.height = 400;
+
+      img.onload = () => {
+        // White background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, 400, 400);
+        
+        // Draw QR code
+        ctx.drawImage(img, 0, 0, 400, 400);
+        
+        // Convert to PNG and download
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            toast.error('Download में समस्या आई!');
+            return;
+          }
+          
+          const url = URL.createObjectURL(blob);
+          const downloadLink = document.createElement('a');
+          downloadLink.download = 'fittrack-qr-code.png';
+          downloadLink.href = url;
+          downloadLink.click();
+          
+          // Clean up
+          URL.revokeObjectURL(url);
+          
+          toast.success('QR Code successfully download हो गया! ✓');
+        }, 'image/png');
+      };
+
+      img.onerror = () => {
+        toast.error('QR Code load नहीं हुआ!');
+      };
+
+      // Convert SVG to base64 and set as image source
+      const encodedData = btoa(unescape(encodeURIComponent(svgData)));
+      img.src = 'data:image/svg+xml;base64,' + encodedData;
+    } catch (error) {
+      console.error('QR Code download error:', error);
+      toast.error('Download में error आया!');
+    }
+  };
+
+  // Calculate BMI
+  const bmi = (formData.weight / ((formData.height / 100) ** 2)).toFixed(1);
+  
+  // Calculate BMR (Basal Metabolic Rate) using Mifflin-St Jeor Equation
+  // Assuming male for this calculation
+  const bmr = Math.round(10 * formData.weight + 6.25 * formData.height - 5 * formData.age + 5);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Profile</h1>
+          <p className="text-gray-600 mt-1">Manage your personal fitness information</p>
+        </div>
+        {!isEditing && (
+          <Button onClick={() => setIsEditing(true)} className="gap-2">
+            <Edit2 className="w-4 h-4" />
+            Edit Profile
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Profile Information */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isEditing ? (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="age">Age</Label>
+                      <Input
+                        id="age"
+                        type="number"
+                        value={formData.age}
+                        onChange={(e) => setFormData({ ...formData, age: Number(e.target.value) })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="weight">Weight (kg)</Label>
+                      <Input
+                        id="weight"
+                        type="number"
+                        value={formData.weight}
+                        onChange={(e) => setFormData({ ...formData, weight: Number(e.target.value) })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="height">Height (cm)</Label>
+                    <Input
+                      id="height"
+                      type="number"
+                      value={formData.height}
+                      onChange={(e) => setFormData({ ...formData, height: Number(e.target.value) })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="goal">Fitness Goal</Label>
+                    <Select
+                      value={formData.goal}
+                      onValueChange={(value) => setFormData({ ...formData, goal: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Lose Weight">Lose Weight</SelectItem>
+                        <SelectItem value="Build Muscle">Build Muscle</SelectItem>
+                        <SelectItem value="Maintain Fitness">Maintain Fitness</SelectItem>
+                        <SelectItem value="Improve Endurance">Improve Endurance</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="activityLevel">Activity Level</Label>
+                    <Select
+                      value={formData.activityLevel}
+                      onValueChange={(value) => setFormData({ ...formData, activityLevel: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Sedentary">Sedentary</SelectItem>
+                        <SelectItem value="Lightly Active">Lightly Active</SelectItem>
+                        <SelectItem value="Moderately Active">Moderately Active</SelectItem>
+                        <SelectItem value="Very Active">Very Active</SelectItem>
+                        <SelectItem value="Extremely Active">Extremely Active</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" className="gap-2">
+                      <Save className="w-4 h-4" />
+                      Save Changes
+                    </Button>
+                    <Button type="button" variant="outline" onClick={handleCancel} className="gap-2">
+                      <X className="w-4 h-4" />
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 pb-4 border-b">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                      <User className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold">{profile.name}</h3>
+                      <p className="text-gray-600">{profile.age} years old</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-500">Weight</div>
+                      <div className="text-lg font-semibold">{profile.weight} kg</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Height</div>
+                      <div className="text-lg font-semibold">{profile.height} cm</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-gray-500">Fitness Goal</div>
+                    <div className="text-lg font-semibold">{profile.goal}</div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-gray-500">Activity Level</div>
+                    <div className="text-lg font-semibold">{profile.activityLevel}</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Stats */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Body Metrics</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="text-sm text-gray-500">Body Mass Index</div>
+                <div className="text-2xl font-bold">{bmi}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {parseFloat(bmi) < 18.5 && 'Underweight'}
+                  {parseFloat(bmi) >= 18.5 && parseFloat(bmi) < 25 && 'Normal weight'}
+                  {parseFloat(bmi) >= 25 && parseFloat(bmi) < 30 && 'Overweight'}
+                  {parseFloat(bmi) >= 30 && 'Obese'}
+                </div>
+              </div>
+              
+              <div>
+                <div className="text-sm text-gray-500">Basal Metabolic Rate</div>
+                <div className="text-2xl font-bold">{bmr}</div>
+                <div className="text-xs text-gray-500 mt-1">calories/day</div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Stats</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Target Weight</span>
+                <span className="font-semibold">
+                  {profile.goal === 'Lose Weight' && `${profile.weight - 5} kg`}
+                  {profile.goal === 'Build Muscle' && `${profile.weight + 3} kg`}
+                  {(profile.goal === 'Maintain Fitness' || profile.goal === 'Improve Endurance') && `${profile.weight} kg`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Daily Calorie Goal</span>
+                <span className="font-semibold">2500 kcal</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Weekly Workout Goal</span>
+                <span className="font-semibold">5 sessions</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <QrCode className="w-5 h-5" />
+                <CardTitle>Website QR Code</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLocalhost && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800 font-medium">⚠️ Local URL Detected</p>
+                  <p className="text-xs text-yellow-700 mt-1">
+                    नीचे अपना actual domain URL डालें जो phone से access हो सके
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="customUrl" className="text-sm">
+                  {customUrl ? 'आपका Domain URL:' : 'अपना Domain URL यहाँ डालें:'}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="customUrl"
+                    type="url"
+                    placeholder="https://yourwebsite.com"
+                    value={customUrl}
+                    onChange={(e) => setCustomUrl(e.target.value)}
+                    className="flex-1"
+                  />
+                  {customUrl && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => setCustomUrl('')}
+                      title="Clear URL"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {customUrl 
+                    ? '✓ QR code अब इस URL के लिए बन गया है' 
+                    : 'अपना free domain URL paste करें (जैसे: https://mysite.netlify.app)'}
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center gap-3 pt-2">
+                <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
+                  <QRCodeSVG 
+                    value={websiteUrl} 
+                    size={160} 
+                    id="qr-code-svg"
+                    level="H"
+                    includeMargin={true}
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-gray-700">
+                    {customUrl ? '✓ Custom URL' : isLocalhost ? '⚠️ Local URL' : '✓ Current URL'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1 break-all px-2">{websiteUrl}</p>
+                </div>
+              </div>
+
+              <Button 
+                variant="outline" 
+                className="w-full gap-2" 
+                onClick={downloadQRCode}
+              >
+                <Download className="w-4 h-4" />
+                QR Code डाउनलोड करें
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
